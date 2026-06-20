@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parts Stock Tracker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg2:#f5f5f3;--bg3:#eeede9;
+  --text:#1a1a18;--text2:#6b6b67;--text3:#9a9a96;
+  --border:rgba(0,0,0,0.12);--border2:rgba(0,0,0,0.22);
+  --r:8px;--rl:12px;
+  --blue-bg:#E6F1FB;--blue-tx:#0C447C;
+  --green-bg:#EAF3DE;--green-tx:#3B6D11;--green-bd:#C0DD97;
+  --amber-bg:#FAEEDA;--amber-tx:#854F0B;
+  --red-bg:#FCEBEB;--red-tx:#A32D2D;--red-bd:#F09595;
+  --pur-bg:#F0EAFB;--pur-tx:#5B3B9A;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#1e1e1c;--bg2:#2a2a28;--bg3:#333330;
+  --text:#f0efe8;--text2:#a0a09a;--text3:#6a6a66;
+  --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
+  --blue-bg:#0c2a4a;--blue-tx:#85B7EB;
+  --green-bg:#1a2e0a;--green-tx:#97C459;--green-bd:#3B6D11;
+  --amber-bg:#2e1e00;--amber-tx:#EF9F27;
+  --red-bg:#2e0a0a;--red-tx:#F09595;--red-bd:#A32D2D;
+  --pur-bg:#1e1430;--pur-tx:#B89AEA;
+}}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg3);color:var(--text);min-height:100vh;padding:1rem}
+.app{max-width:580px;margin:0 auto}
+.tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--rl);padding:3px;margin-bottom:1.25rem}
+.tab{flex:1;padding:7px 2px;border:none;border-radius:calc(var(--rl) - 2px);background:transparent;color:var(--text2);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:3px;transition:background .15s,color .15s}
+.tab.active{background:var(--bg);color:var(--text);font-weight:500}
+.tab:hover:not(.active){color:var(--text)}
+.panel{display:none}.panel.active{display:block}
+.card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:1rem 1.25rem;margin-bottom:1rem}
+.card h3{font-size:14px;font-weight:500;margin-bottom:.5rem}
+.scan-zone{border:0.5px dashed var(--border2);border-radius:var(--rl);padding:2rem 1rem;text-align:center;background:var(--bg2);margin-bottom:.5rem;cursor:pointer;position:relative;overflow:hidden;transition:background .15s}
+.scan-zone:hover{background:var(--bg3)}
+.scan-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.preview-img{max-height:180px;max-width:100%;border-radius:var(--r);margin:0 auto .75rem;border:0.5px solid var(--border);display:block}
+.manual-row{text-align:center;margin-bottom:1rem}
+.manual-btn{font-size:15px;padding:2rem 1rem;border:0.5px dashed var(--border2);border-radius:var(--rl);background:var(--bg2);color:var(--text2);cursor:pointer;width:100%;text-align:center;display:block}
+.manual-btn:hover{color:var(--text);background:var(--bg3)}
+.sm-btn{font-size:12px;padding:6px 14px;border-style:solid;border-radius:var(--r);background:var(--bg);color:var(--text2)}
+.manual-box{display:none;margin-bottom:1rem}
+.manual-box .inner{display:flex;gap:8px}
+.msg{display:flex;align-items:flex-start;gap:10px;padding:.75rem 1rem;border-radius:var(--r);font-size:14px;margin-bottom:1rem}
+.msg-blue{background:var(--blue-bg);color:var(--blue-tx)}
+.msg-red{background:var(--red-bg);color:var(--red-tx)}
+.spin{animation:spin 1s linear infinite;display:inline-block;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result-card{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--rl);padding:1rem 1.25rem;margin-bottom:1rem}
+.badge{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500;white-space:nowrap}
+.b-high{background:var(--green-bg);color:var(--green-tx)}
+.b-med{background:var(--amber-bg);color:var(--amber-tx)}
+.b-low{background:var(--red-bg);color:var(--red-tx)}
+.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin-bottom:12px}
+.sl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+.sv{font-size:13px;font-weight:500}
+.mach-box{background:var(--pur-bg);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.mach-no{font-size:14px;font-weight:500;color:var(--pur-tx)}
+.mach-loc{font-size:12px;color:var(--pur-tx);opacity:.8;margin-top:2px}
+.mach-pick-label{font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500}
+.mach-pick-list{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.mach-opt{display:flex;align-items:center;gap:10px;padding:.6rem .875rem;border:0.5px solid var(--border);border-radius:var(--r);cursor:pointer;background:var(--bg);width:100%;text-align:left}
+.mach-opt:hover{background:var(--bg2)}
+.mach-opt.selected{background:var(--pur-bg);border-color:var(--pur-tx)}
+.mach-opt-no{font-size:14px;font-weight:500;color:var(--pur-tx)}
+.mach-opt-loc{font-size:12px;color:var(--text2)}
+.no-match{background:var(--red-bg);border-radius:var(--r);padding:.65rem .875rem;margin-bottom:12px;font-size:13px;color:var(--red-tx)}
+.arow{display:flex;align-items:center;gap:8px;border-top:0.5px solid var(--border);padding-top:12px}
+.qbtn{width:30px;height:30px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text);font-size:16px}
+.qbtn:hover{background:var(--bg2)}
+.qnum{font-size:18px;font-weight:500;min-width:32px;text-align:center}
+.abtn{margin-left:auto;padding:6px 14px;border:0.5px solid var(--border2);border-radius:var(--r);font-size:13px;cursor:pointer;background:var(--bg);color:var(--text)}
+.abtn:hover{background:var(--bg2)}
+.abtn.ok{background:var(--green-bg);color:var(--green-tx);border-color:var(--green-bd)}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem}
+.sec-hdr h2{font-size:16px;font-weight:500}
+.empty{text-align:center;padding:2rem;color:var(--text2);font-size:14px;border:0.5px solid var(--border);border-radius:var(--rl)}
+.si{background:var(--bg);border:0.5px solid var(--border);border-radius:var(--r);padding:.75rem 1rem;margin-bottom:8px;display:flex;align-items:center;gap:12px}
+.si.low{background:var(--red-bg)}
+.si-info{flex:1;min-width:0}
+.si-name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.si-sub{font-size:12px;color:var(--text2)}
+.sqty{background:var(--bg2);border-radius:var(--r);padding:4px 12px;font-size:14px;font-weight:500}
+.warn-badge{font-size:11px;padding:2px 7px;border-radius:20px;background:var(--red-bg);color:var(--red-tx);font-weight:500;margin-left:4px;border:0.5px solid var(--red-bd)}
+.dbtn{width:28px;height:28px;border:none;background:transparent;cursor:pointer;color:var(--text2);display:flex;align-items:center;justify-content:center;border-radius:var(--r);font-size:15px;flex-shrink:0}
+.dbtn:hover{background:var(--red-bg);color:var(--red-tx)}
+.expbtn{padding:6px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.expbtn:hover{background:var(--bg2)}
+.log-wrap{overflow-x:auto;border:0.5px solid var(--border);border-radius:var(--rl);background:var(--bg)}
+table.lt{width:100%;border-collapse:collapse;font-size:13px}
+.lt th{text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);border-bottom:0.5px solid var(--border);white-space:nowrap}
+.lt td{padding:7px 10px;border-bottom:0.5px solid var(--border)}
+.lt tr:last-child td{border-bottom:none}
+.lt tr:hover td{background:var(--bg2)}
+.fbtn{padding:6px 12px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg2);color:var(--text);font-size:13px;cursor:pointer;position:relative;overflow:hidden}
+.fbtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.fbtn:hover{background:var(--bg3)}
+.fstat{font-size:13px;color:var(--text2)}
+.fstat.ok{color:var(--green-tx)}
+.mt{width:100%;border-collapse:collapse;font-size:13px;margin-top:.75rem}
+.mt th{text-align:left;padding:4px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);border-bottom:0.5px solid var(--border)}
+.mt td{padding:5px 8px;border-bottom:0.5px solid var(--border)}
+.mt tr:last-child td{border-bottom:none}
+.dlt{font-size:12px;color:var(--blue-tx);cursor:pointer;background:none;border:none;padding:0;text-decoration:underline}
+.si-input{flex:1;border:0.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--bg2);color:var(--text)}
+.si-input:focus{outline:none;border-color:var(--border2)}
+.sbtn{padding:6px 14px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer;white-space:nowrap}
+.sbtn:hover{background:var(--bg2)}
+.sbtn.ok{background:var(--green-bg);color:var(--green-tx);border-color:var(--green-bd)}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem}
+.modal{background:var(--bg);border-radius:var(--rl);padding:1.25rem;max-width:320px;width:100%}
+.modal h3{font-size:15px;font-weight:500;margin-bottom:8px}
+.modal p{font-size:13px;color:var(--text2);margin-bottom:1rem}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end}
+.modal-cancel{padding:6px 14px;border:0.5px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);font-size:13px;cursor:pointer}
+.modal-confirm{padding:6px 14px;border:0.5px solid var(--red-bd);border-radius:var(--r);background:var(--red-bg);color:var(--red-tx);font-size:13px;cursor:pointer;font-weight:500}
+.pw-input{width:100%;border:0.5px solid var(--border);border-radius:var(--r);padding:7px 10px;font-size:13px;background:var(--bg2);color:var(--text);margin-bottom:.75rem}
+.pw-input:focus{outline:none;border-color:var(--border2)}
+.sr-item{display:flex;align-items:center;gap:10px;padding:.6rem .75rem;border:0.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;background:var(--bg)}
+.sr-item.low{background:var(--red-bg)}
+.sr-model{font-size:13px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sr-detail{font-size:11px;color:var(--text2);margin-top:2px}
+.sr-qty{font-size:13px;font-weight:500;background:var(--bg2);border-radius:var(--r);padding:3px 10px;flex-shrink:0}
+.sr-empty{font-size:13px;color:var(--text2);text-align:center;padding:1rem 0}
+.qr-overlay{position:fixed;inset:0;background:#000;z-index:2000;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.qr-overlay video{width:100%;max-width:500px;border-radius:var(--r)}
+.qr-overlay canvas{display:none}
+.qr-frame{position:absolute;width:200px;height:200px;border:3px solid #fff;border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
+.qr-hint{color:#fff;font-size:14px;margin-top:1rem;text-align:center}
+.qr-close{position:absolute;top:1rem;right:1rem;color:#fff;font-size:28px;cursor:pointer;background:none;border:none;line-height:1}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="tabs">
+  <button class="tab active" data-tab="out"><i class="ti ti-arrow-up"></i> Stock out</button>
+  <button class="tab" data-tab="in"><i class="ti ti-arrow-down"></i> Stock in</button>
+  <button class="tab" data-tab="stock"><i class="ti ti-package"></i> Stock</button>
+  <button class="tab" data-tab="log"><i class="ti ti-history"></i> Log</button>
+  <button class="tab" data-tab="mapping"><i class="ti ti-table"></i> Mapping</button>
+  <button class="tab" data-tab="search"><i class="ti ti-search"></i> Search</button>
+  <button class="tab" data-tab="settings" style="flex:0;padding:7px 10px"><i class="ti ti-settings"></i></button>
+</div>
+
+<!-- STOCK OUT -->
+<div class="panel active" id="panel-out">
+  <div class="scan-zone" id="szOut" style="padding:1.25rem">
+    <input type="file" id="fileOut" accept="image/*" capture="environment">
+    <div id="promptOut">
+      <i class="ti ti-arrow-up" style="font-size:28px;color:var(--text3);display:block;margin-bottom:.5rem"></i>
+      <div style="font-size:15px;font-weight:500;margin-bottom:4px">Stock out — Scan label</div>
+      <div style="font-size:13px;color:var(--text2)">Festo, THK, Rexroth — tap to scan</div>
+    </div>
+    <div id="prevOutWrap" style="display:none">
+      <img id="prevOut" class="preview-img" alt="Cylinder photo">
+      <div style="font-size:13px;color:var(--text2)">Tap to use a different photo</div>
+    </div>
+  </div>
+  <div class="manual-row" style="display:flex;flex-direction:column;gap:8px">
+    <button class="manual-btn" id="qrScanOutBtn"><i class="ti ti-qrcode" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Stock out — Scan QR code</button>
+    <button class="manual-btn sm-btn" id="manualOutBtn"><i class="ti ti-keyboard" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Enter manually</button>
+  </div>
+  <div class="manual-box" id="manualOutBox">
+    <div class="inner">
+      <input class="si-input" id="manualOutInput" placeholder="e.g. DSBC-40-300-PPVA-N3 or THK part no." style="text-transform:uppercase">
+      <button class="abtn" id="manualOutApply">Apply</button>
+    </div>
+  </div>
+  <div id="msgOut" class="msg msg-blue" style="display:none">
+    <i class="ti ti-loader spin"></i><span id="msgOutTxt">Identifying…</span>
+  </div>
+  <div id="errOut" class="msg msg-red" style="display:none">
+    <i class="ti ti-alert-circle" style="flex-shrink:0"></i>
+    <div style="flex:1"><div id="errOutTxt"></div>
+    <button style="margin-top:6px;font-size:12px;padding:4px 10px;border:0.5px solid var(--red-bd);border-radius:var(--r);background:transparent;color:var(--red-tx);cursor:pointer" id="retryOut">
+      <i class="ti ti-refresh" style="font-size:12px;vertical-align:-1px"></i> Retry
+    </button></div>
+  </div>
+  <div id="resultOut" class="result-card" style="display:none">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:500" id="outTitle"></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="outSub"></div>
+      </div>
+      <span class="badge" id="outConf"></span>
+    </div>
+    <div class="spec-grid" id="outSpecs"></div>
+    <div id="outMachBox" style="display:none"></div>
+    <div id="outNoMatch" class="no-match" style="display:none">No machine mapping found. Add this cylinder to the Mapping tab first.</div>
+    <input type="hidden" id="outMachNo">
+    <input type="hidden" id="outLoc">
+    <div class="arow">
+      <span style="font-size:13px;color:var(--text2)">Qty</span>
+      <button class="qbtn" id="outQMinus"><i class="ti ti-minus"></i></button>
+      <span class="qnum" id="outQVal">1</span>
+      <button class="qbtn" id="outQPlus"><i class="ti ti-plus"></i></button>
+      <button class="abtn" id="outLogBtn">Log replacement</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK IN -->
+<div class="panel" id="panel-in">
+  <div class="scan-zone" id="szIn" style="padding:1.25rem">
+    <input type="file" id="fileIn" accept="image/*" capture="environment">
+    <div id="promptIn">
+      <i class="ti ti-arrow-down" style="font-size:28px;color:var(--text3);display:block;margin-bottom:.5rem"></i>
+      <div style="font-size:15px;font-weight:500;margin-bottom:4px">Stock in — Scan label</div>
+      <div style="font-size:13px;color:var(--text2)">Festo, THK, Rexroth — tap to scan</div>
+    </div>
+    <div id="prevInWrap" style="display:none">
+      <img id="prevIn" class="preview-img" alt="Cylinder photo">
+      <div style="font-size:13px;color:var(--text2)">Tap to use a different photo</div>
+    </div>
+  </div>
+  <div class="manual-row" style="display:flex;flex-direction:column;gap:8px">
+    <button class="manual-btn" id="qrScanInBtn"><i class="ti ti-qrcode" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Stock in — Scan QR code</button>
+    <button class="manual-btn sm-btn" id="manualInBtn"><i class="ti ti-keyboard" style="font-size:12px;vertical-align:-1px;margin-right:4px"></i>Enter manually</button>
+  </div>
+  <div class="manual-box" id="manualInBox">
+    <div class="inner">
+      <input class="si-input" id="manualInInput" placeholder="e.g. ADN-25-150-A-P-A or THK part no." style="text-transform:uppercase">
+      <button class="abtn" id="manualInApply">Apply</button>
+    </div>
+  </div>
+  <div id="msgIn" class="msg msg-blue" style="display:none">
+    <i class="ti ti-loader spin"></i><span id="msgInTxt">Identifying…</span>
+  </div>
+  <div id="errIn" class="msg msg-red" style="display:none">
+    <i class="ti ti-alert-circle" style="flex-shrink:0"></i>
+    <div id="errInTxt" style="flex:1"></div>
+  </div>
+  <div id="resultIn" class="result-card" style="display:none">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:500" id="inTitle"></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="inSub"></div>
+      </div>
+      <span class="badge" id="inConf"></span>
+    </div>
+    <div class="spec-grid" id="inSpecs"></div>
+    <div class="arow">
+      <span style="font-size:13px;color:var(--text2)">Qty</span>
+      <button class="qbtn" id="inQMinus"><i class="ti ti-minus"></i></button>
+      <span class="qnum" id="inQVal">1</span>
+      <button class="qbtn" id="inQPlus"><i class="ti ti-plus"></i></button>
+      <button class="abtn" id="inAddBtn">Add to stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK -->
+<div class="panel" id="panel-stock">
+  <div class="sec-hdr">
+    <h2>Stock on hand</h2>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:13px;color:var(--text2)" id="stockMeta">0 units</span>
+      <button class="expbtn" id="stockExpBtn"><i class="ti ti-file-spreadsheet"></i> Export</button>
+    </div>
+  </div>
+  <div id="stockList"></div>
+</div>
+
+<!-- LOG -->
+<div class="panel" id="panel-log">
+  <div class="sec-hdr">
+    <h2>Replacement log</h2>
+    <button class="expbtn" id="logExpBtn"><i class="ti ti-file-spreadsheet"></i> Export</button>
+  </div>
+  <div id="logArea"></div>
+</div>
+
+<!-- MAPPING -->
+<div class="panel" id="panel-mapping">
+  <div class="card">
+    <h3>Cylinder to machine mapping</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:.75rem">Upload Excel with columns: <strong>Model</strong>, <strong>Machine No.</strong>, <strong>Location</strong>, <strong>Min Stock</strong>, <strong>Max Stock</strong></p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <button class="fbtn"><input type="file" id="mappingFile" accept=".xlsx,.xls,.csv"><i class="ti ti-upload" style="font-size:14px;vertical-align:-2px;margin-right:4px"></i>Upload</button>
+      <span class="fstat" id="mStat">No file loaded</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="dlt" id="dlTpl"><i class="ti ti-download" style="font-size:12px;vertical-align:-1px"></i> Download template</button>
+      <button id="mSaveBtn" style="display:none;font-size:12px;padding:4px 10px;border:0.5px solid var(--green-bd);border-radius:var(--r);background:var(--green-bg);color:var(--green-tx);cursor:pointer"><i class="ti ti-cloud-upload" style="font-size:12px;vertical-align:-1px"></i> Save to Firebase</button>
+    </div>
+    <div id="mPreview" style="display:none;overflow-x:auto;margin-top:.75rem">
+      <table class="mt">
+        <thead><tr><th>Model</th><th>Machine No.</th><th>Location</th><th>Min</th><th>Max</th></tr></thead>
+        <tbody id="mBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS -->
+<div class="panel" id="panel-settings">
+  <div class="card">
+    <h3><i class="ti ti-brand-groq" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>Groq API key</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:.75rem">Required for photo scanning. Free at console.groq.com</p>
+    <div style="display:flex;gap:8px">
+      <input type="password" class="si-input" id="apiKey" placeholder="gsk_..." autocomplete="off">
+      <button class="sbtn" id="apiSave">Save</button>
+    </div>
+  </div>
+  <div class="card">
+    <h3><i class="ti ti-cloud" style="font-size:15px;vertical-align:-2px;margin-right:6px"></i>Firebase</h3>
+    <div style="display:flex;justify-content:space-between;margin-bottom:.75rem">
+      <span style="font-size:13px;color:var(--text2)">Status</span>
+      <span style="font-size:13px" id="fbStatus">○ Not connected</span>
+    </div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:.5rem">Paste your firebaseConfig to sync across all tablets.</p>
+    <textarea id="fbConfigInput" style="width:100%;height:90px;border:0.5px solid var(--border);border-radius:var(--r);padding:8px;font-size:12px;font-family:monospace;background:var(--bg2);color:var(--text);resize:vertical;margin-bottom:8px" placeholder="const firebaseConfig = { apiKey: ..., projectId: ..., ... }"></textarea>
+    <button class="sbtn" id="fbSave">Connect</button>
+  </div>
+  <div style="font-size:11px;color:var(--text3);text-align:center;padding:.5rem">Keys are saved in this browser only.</div>
+</div>
+
+<!-- QR OVERLAY -->
+<div class="qr-overlay" id="qrOverlay" style="display:none">
+  <video id="qrVideo" autoplay playsinline muted></video>
+  <div class="qr-frame"></div>
+  <canvas id="qrCanvas"></canvas>
+  <div class="qr-hint">Point at the QR code</div>
+  <button class="qr-close" id="qrClose">&times;</button>
+</div>
+
+<!-- SEARCH -->
+<div class="panel" id="panel-search">
+
+  <div class="card" style="margin-bottom:.75rem">
+    <div style="font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem"><i class="ti ti-package" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Search by part number</div>
+    <input class="si-input" id="searchPart" placeholder="e.g. DSBC, ADN-25, VPA15…" style="width:100%">
+    <div id="searchPartResults" style="margin-top:.75rem"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem"><i class="ti ti-map-pin" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Search by machine / location</div>
+    <input class="si-input" id="searchLoc" placeholder="e.g. P2, gripper, magazine…" style="width:100%">
+    <div id="searchLocResults" style="margin-top:.75rem"></div>
+  </div>
+
+</div>
+
+<!-- MODALS -->
+<div class="overlay" id="deleteStockModal" style="display:none">
+  <div class="modal">
+    <h3>Remove from stock?</h3>
+    <p id="deleteStockMsg"></p>
+    <div class="modal-btns">
+      <button class="modal-cancel" id="deleteStockCancel">Cancel</button>
+      <button class="modal-confirm" id="deleteStockConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="deleteLogModal" style="display:none">
+  <div class="modal">
+    <h3>Delete log entry?</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:.75rem">Enter password to delete.</p>
+    <input type="password" class="pw-input" id="logPw" placeholder="Password">
+    <div class="modal-btns">
+      <button class="modal-cancel" id="deleteLogCancel">Cancel</button>
+      <button class="modal-confirm" id="deleteLogConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:2rem;padding-bottom:.5rem">v1.55 — 20 Jun 2026</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var db=null, mapping={}, mappingRows=[], stock=[], replacements=[];
+var outResult=null, outQty=1, inResult=null, inQty=1;
+var pendingStockDelete=null, pendingLogDelete=null;
+
+function $(id){return document.getElementById(id);}
+function show(id){$(id).style.display='block';}
+function hide(id){$(id).style.display='none';}
+function flex(id){$(id).style.display='flex';}
+
+function renderBadge(el,conf){
+  el.textContent={high:'High confidence',medium:'Medium confidence',low:'Low confidence'}[conf]||conf;
+  el.className='badge '+({high:'b-high',medium:'b-med',low:'b-low'}[conf]||'');
+}
+
+function renderSpecs(el,r){
+  el.innerHTML=[]
+    .map(function(s){return '<div><div class="sl">'+s[0]+'</div><div class="sv">'+s[1]+'</div></div>';}).join('');
+}
+
+function toBase64(file,cb){
+  var r=new FileReader();
+  r.onload=function(){cb(null,r.result.split(',')[1]);};
+  r.onerror=function(){cb(new Error('Read failed'));};
+  r.readAsDataURL(file);
+}
+
+function nowStrings(){
+  var n=new Date();
+  return{date:n.toLocaleDateString('en-AU'),time:n.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})};
+}
+
+function deriveSpecs(r){
+  var m=(r.model||'').toUpperCase();
+  var parts=m.split('-');
+  if(!r.series&&parts.length>0) r.series=parts[0];
+  if(!r.bore_mm){for(var i=1;i<parts.length;i++){var n=parseInt(parts[i]);if(!isNaN(n)&&n>0){r.bore_mm=n;break;}}}
+  if(!r.stroke_mm){var found=0;for(var j=1;j<parts.length;j++){var n2=parseInt(parts[j]);if(!isNaN(n2)&&n2>0){found++;if(found===2){r.stroke_mm=n2;break;}}}}
+  return r;
+}
+
+// ── API scan ──────────────────────────────────────────────────────────────────
+function callGroq(base64,mediaType,onSuccess,onError){
+  var key=localStorage.getItem('festo_api_key')||($('apiKey').value||'').trim();
+  if(!key){onError('Enter your Groq API key in the Settings tab.');return;}
+
+  // Build model list - only real Festo part numbers
+  var modelList=[];
+  Object.values(mapping).forEach(function(e){
+    var name=e.displayName||'';
+    if(modelList.indexOf(name)===-1&&/[A-Z]{2,}-\d+/.test(name)) modelList.push(name);
+  });
+
+  var prompt='Look at the product label in the image. Read the part number or model number printed on the label. This could be a Festo cylinder (e.g. DSBC-40-300-PPVA-N3), a THK bearing/rail, or a Rexroth part. Reply with ONLY the part number, nothing else.';
+
+  fetch('https://api.groq.com/openai/v1/chat/completions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body:JSON.stringify({
+      model:'qwen/qwen3.6-27b',
+      max_tokens:50,
+      temperature:0,
+      reasoning_effort:'none',
+      reasoning_format:'hidden',
+      messages:[{role:'user',content:[
+        {type:'image_url',image_url:{url:'data:'+mediaType+';base64,'+base64}},
+        {type:'text',text:prompt}
+      ]}]
+    })
+  })
+  .then(function(res){return res.json().then(function(d){return{ok:res.ok,data:d};});})
+  .then(function(r){
+    if(!r.ok){
+      var errMsg=r.data&&r.data.error?r.data.error.message:'API error';
+      if(r.data&&r.data.error&&(r.data.error.code==='rate_limit_exceeded'||errMsg.toLowerCase().indexOf('rate limit')!==-1)){
+        if(callGroq._retrying){callGroq._retrying=false;onError('Rate limit — please wait 30 seconds before scanning again.');return;}
+        callGroq._retrying=true;
+        onError('Rate limit — auto-retrying in 15 seconds…');
+        setTimeout(function(){callGroq._retrying=false;callGroq(base64,mediaType,onSuccess,onError);},15000);
+        return;
+      }
+      onError(errMsg); return;
+    }
+    var raw=(r.data.choices&&r.data.choices[0]&&r.data.choices[0].message&&r.data.choices[0].message.content)||'';
+
+    var usage=r.data.usage||{};
+    console.log('TOKENS — prompt:',usage.prompt_tokens,'completion:',usage.completion_tokens,'total:',usage.total_tokens);
+    console.log('RAW:',raw);
+    var text=raw.replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/```[a-z]*/gi,'').replace(/```/g,'').trim();
+    var model=null;
+    // exact match against mapping list
+    if(modelList.length>0){
+      var tu=text.toUpperCase();
+      for(var i=0;i<modelList.length;i++){if(tu.indexOf(modelList[i].toUpperCase())!==-1){model=modelList[i];break;}}
+    }
+    // regex fallback
+    if(!model){var m1=text.match(/\b([A-Z]{2,8}-\d{1,3}-\d{2,4}-[\w-]+)\b/i);if(m1)model=m1[1];}
+    if(!model){var m2=text.match(/\b([A-Z]{2,8}-\d{1,3}-[\w-]{3,})\b/i);if(m2)model=m2[1];}
+    if(model)model=model.toUpperCase().replace(/[\s.,;:!?'"]+$/g,'');
+    onSuccess(deriveSpecs({found:true,model:model||null,confidence:model?'high':'low',raw:raw}));
+  })
+  .catch(function(e){onError('Network error: '+e.message);});
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active');});
+    document.querySelectorAll('.panel').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');
+    $('panel-'+t.dataset.tab).classList.add('active');
+    if(t.dataset.tab==='stock') renderStock();
+    if(t.dataset.tab==='log') renderLog();
+    if(t.dataset.tab==='settings') renderSettings();
+    if(t.dataset.tab==='mapping') renderMappingPreview();
+  });
+});
+
+// ── jsQR loader + QR decoder ─────────────────────────────────────────────────
+var jsqrLoaded=false;
+function loadJsQR(cb){
+  if(jsqrLoaded&&window.jsQR){cb();return;}
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+  s.onload=function(){jsqrLoaded=true;cb();};
+  s.onerror=function(){cb();};
+  document.head.appendChild(s);
+}
+
+function tryQR(file, cb){
+  loadJsQR(function(){
+    if(!window.jsQR){cb(null);return;}
+    var img=new Image();
+    img.onload=function(){
+      // Try multiple scales - large photos need downscaling for jsQR to work
+      var scales=[1,0.5,0.25,0.75];
+      var found=null;
+      for(var i=0;i<scales.length;i++){
+        var scale=scales[i];
+        var canvas=document.createElement('canvas');
+        canvas.width=Math.round(img.width*scale);
+        canvas.height=Math.round(img.height*scale);
+        var ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        var data=ctx.getImageData(0,0,canvas.width,canvas.height);
+        var result=jsQR(data.data,data.width,data.height,{inversionAttempts:'dontInvert'});
+        if(result){found=result.data;break;}
+      }
+      cb(found);
+    };
+    img.onerror=function(){cb(null);};
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+// ── AI scan helper ───────────────────────────────────────────────────────────
+function aiScan(file,mediaType,msgTxtId,msgId,errTxtId,errId,onResult){
+  $(msgTxtId).textContent='Identifying part…';
+  toBase64(file,function(err,b64){
+    if(err){hide(msgId);$(errTxtId).textContent='Could not read image.';show(errId);return;}
+    callGroq(b64,mediaType,function(r){
+      hide(msgId);
+      if(!r.model){$(errTxtId).textContent='Could not read label. Use manual entry above.';show(errId);return;}
+      onResult(r);
+    },function(msg){hide(msgId);$(errTxtId).textContent=msg;show(errId);});
+  });
+}
+
+// ── Scan helper ───────────────────────────────────────────────────────────────
+function setupScan(fileId,promptId,prevWrapId,prevImgId,msgId,msgTxtId,errId,errTxtId,resultId,onResult){
+  $(fileId).addEventListener('change',function(e){
+    var file=e.target.files[0]; if(!file) return;
+    $(prevImgId).src=URL.createObjectURL(file);
+    hide(promptId); show(prevWrapId); hide(errId); hide(resultId);
+    $(msgTxtId).textContent='Reading…'; flex(msgId);
+    var mediaType=(file.type&&file.type.startsWith('image/'))?file.type:'image/jpeg';
+    // Try QR decode first using jsQR, then fall back to AI
+    tryQR(file, function(code){
+      if(code){
+        hide(msgId);
+        onResult(deriveSpecs({found:true,model:code.toUpperCase(),confidence:'high'}));
+      } else {
+        aiScan(file,mediaType,msgTxtId,msgId,errTxtId,errId,onResult);
+      }
+    });
+  });
+}
+
+function applyModel(model,isOut){
+  var r=deriveSpecs({found:true,model:model,confidence:'high'});
+  if(isOut){
+    outResult=r; outQty=1; $('outQVal').textContent='1';
+    $('outTitle').textContent=model; $('outSub').textContent=r.series?'Series '+r.series:'Festo cylinder';
+    renderBadge($('outConf'),'high'); renderSpecs($('outSpecs'),r);
+    renderMachinePicker(model,$('outMachBox'),$('outNoMatch'),$('outMachNo'),$('outLoc'));
+    show('resultOut'); $('outLogBtn').textContent='Log replacement'; $('outLogBtn').className='abtn';
+    hide('errOut');
+  } else {
+    var key=model.toLowerCase();
+    var inMap=mapping[key]||Object.keys(mapping).find(function(k){return key.indexOf(k)!==-1||k.indexOf(key)!==-1;});
+    if(!inMap){$('errInTxt').textContent='⚠ '+model+' is not in your mapping. Add it to the Mapping tab first.';show('errIn');return;}
+    inResult=r; inQty=1; $('inQVal').textContent='1';
+    $('inTitle').textContent=model; $('inSub').textContent=r.series?'Series '+r.series:'Festo cylinder';
+    renderBadge($('inConf'),'high'); renderSpecs($('inSpecs'),r);
+    show('resultIn'); $('inAddBtn').textContent='Add to stock'; $('inAddBtn').className='abtn';
+    hide('errIn');
+  }
+}
+
+// ── Stock Out ─────────────────────────────────────────────────────────────────
+setupScan('fileOut','promptOut','prevOutWrap','prevOut','msgOut','msgOutTxt','errOut','errOutTxt','resultOut',function(r){
+  applyModel(r.model,true);
+});
+
+$('retryOut').addEventListener('click',function(){$('fileOut').dispatchEvent(new Event('change'));});
+$('outQMinus').addEventListener('click',function(){if(outQty>1){outQty--;$('outQVal').textContent=outQty;}});
+$('outQPlus').addEventListener('click',function(){outQty++;$('outQVal').textContent=outQty;});
+
+$('manualOutBtn').addEventListener('click',function(){
+  var b=$('manualOutBox');
+  b.style.display=b.style.display==='none'?'block':'none';
+  if(b.style.display==='block') $('manualOutInput').focus();
+});
+$('manualOutApply').addEventListener('click',function(){
+  var m=$('manualOutInput').value.trim().toUpperCase(); if(!m) return;
+  $('manualOutBox').style.display='none'; applyModel(m,true);
+});
+$('manualOutInput').addEventListener('keydown',function(e){if(e.key==='Enter')$('manualOutApply').click();});
+
+$('outLogBtn').addEventListener('click',function(){
+  if(!outResult||!outResult.model) return;
+  var machine=$('outMachNo').value||'';
+  var location=$('outLoc').value||'';
+  if(!machine){alert('Please select a machine before logging.');return;}
+  if(!db){alert('Connect Firebase in the Settings tab.');return;}
+  var t=nowStrings();
+  var mk=outResult.model.toLowerCase().replace(/[^a-z0-9\-]/g,'_');
+  var ex=stock.filter(function(s){return s.model.toLowerCase()===outResult.model.toLowerCase();})[0];
+  var newQty=ex?Math.max(0,ex.qty-outQty):0;
+  db.collection('stock').doc(mk).set({model:outResult.model,series:outResult.series||'',bore:outResult.bore_mm||'',stroke:outResult.stroke_mm||'',qty:newQty});
+  db.collection('replacements').add({date:t.date,time:t.time,ts:firebase.firestore.FieldValue.serverTimestamp(),model:outResult.model,series:outResult.series||'',bore:outResult.bore_mm||'',stroke:outResult.stroke_mm||'',machine:machine,location:location,qty:outQty,type:'out'});
+  $('outLogBtn').textContent='Logged ✓'; $('outLogBtn').className='abtn ok';
+});
+
+function renderMachinePicker(model,boxEl,noMatchEl,machNoEl,locEl){
+  boxEl.innerHTML=''; hide(boxEl.id); hide(noMatchEl.id);
+  machNoEl.value=''; locEl.value='';
+  var key=(model||'').toLowerCase();
+  var entry=mapping[key];
+  if(!entry){Object.keys(mapping).forEach(function(k){if(!entry&&(key.indexOf(k)!==-1||k.indexOf(key)!==-1))entry=mapping[k];});}
+  if(!entry){show(noMatchEl.id);return;}
+  var machines=entry.machines||[];
+  if(machines.length===1){
+    boxEl.innerHTML='<div class="mach-box"><i class="ti ti-settings-2" style="flex-shrink:0;color:var(--pur-tx)"></i><div><div class="mach-no">'+machines[0].machine+'</div><div class="mach-loc">'+(machines[0].location||'')+'</div></div></div>';
+    machNoEl.value=machines[0].machine; locEl.value=machines[0].location||'';
+    show(boxEl.id);
+  } else {
+    var html='<div class="mach-pick-label"><i class="ti ti-settings-2" style="font-size:13px;vertical-align:-1px;margin-right:4px"></i>Select the machine</div><div class="mach-pick-list">';
+    machines.forEach(function(m,i){html+='<button class="mach-opt" data-i="'+i+'" data-machine="'+m.machine+'" data-loc="'+(m.location||'')+'"><i class="ti ti-settings-2" style="color:var(--pur-tx);font-size:16px;flex-shrink:0"></i><div><div class="mach-opt-no">'+m.machine+'</div><div class="mach-opt-loc">'+(m.location||'')+'</div></div></button>';});
+    html+='</div>';
+    boxEl.innerHTML=html;
+    boxEl.querySelectorAll('.mach-opt').forEach(function(btn){
+      btn.addEventListener('click',function(){
+        boxEl.querySelectorAll('.mach-opt').forEach(function(b){b.classList.remove('selected');});
+        btn.classList.add('selected');
+        machNoEl.value=btn.dataset.machine; locEl.value=btn.dataset.loc;
+      });
+    });
+    show(boxEl.id);
+  }
+}
+
+// ── Stock In ──────────────────────────────────────────────────────────────────
+setupScan('fileIn','promptIn','prevInWrap','prevIn','msgIn','msgInTxt','errIn','errInTxt','resultIn',function(r){
+  applyModel(r.model,false);
+});
+
+$('manualInBtn').addEventListener('click',function(){
+  var b=$('manualInBox');
+  b.style.display=b.style.display==='none'?'block':'none';
+  if(b.style.display==='block') $('manualInInput').focus();
+});
+$('manualInApply').addEventListener('click',function(){
+  var m=$('manualInInput').value.trim().toUpperCase(); if(!m) return;
+  $('manualInBox').style.display='none'; applyModel(m,false);
+});
+$('manualInInput').addEventListener('keydown',function(e){if(e.key==='Enter')$('manualInApply').click();});
+
+$('inQMinus').addEventListener('click',function(){if(inQty>1){inQty--;$('inQVal').textContent=inQty;}});
+$('inQPlus').addEventListener('click',function(){inQty++;$('inQVal').textContent=inQty;});
+
+$('inAddBtn').addEventListener('click',function(){
+  if(!inResult||!inResult.model) return;
+  if(!db){alert('Connect Firebase in the Settings tab.');return;}
+  var t=nowStrings();
+  var mk=inResult.model.toLowerCase().replace(/[^a-z0-9\-]/g,'_');
+  var ex=stock.filter(function(s){return s.model.toLowerCase()===inResult.model.toLowerCase();})[0];
+  var newQty=ex?ex.qty+inQty:inQty;
+  db.collection('stock').doc(mk).set({model:inResult.model,series:inResult.series||'',bore:inResult.bore_mm||'',stroke:inResult.stroke_mm||'',qty:newQty});
+  db.collection('replacements').add({date:t.date,time:t.time,ts:firebase.firestore.FieldValue.serverTimestamp(),model:inResult.model,series:inResult.series||'',bore:inResult.bore_mm||'',stroke:inResult.stroke_mm||'',machine:'—',location:'—',qty:inQty,type:'in'});
+  $('inAddBtn').textContent='Added ✓'; $('inAddBtn').className='abtn ok';
+});
+
+// ── Stock tab ─────────────────────────────────────────────────────────────────
+function renderStock(){
+  var units=stock.reduce(function(a,s){return a+s.qty;},0);
+  $('stockMeta').textContent=units+' unit'+(units!==1?'s':'')+' · '+stock.length+' model'+(stock.length!==1?'s':'');
+  if(!stock.length){$('stockList').innerHTML='<div class="empty"><i class="ti ti-box-off" style="font-size:24px;display:block;margin-bottom:8px"></i>No cylinders in stock yet</div>';return;}
+  $('stockList').innerHTML=stock.map(function(s){
+    var mk=s.model.toLowerCase();
+    var minS=(mapping[mk]&&mapping[mk].minStock)||0;
+    var isLow=minS>0&&s.qty<minS;
+    return '<div class="si'+(isLow?' low':'')+'">'
+      +'<i class="ti ti-cylinder" style="font-size:20px;color:'+(isLow?'var(--red-tx)':'var(--text2)')+';flex-shrink:0"></i>'
+      +'<div class="si-info"><div class="si-name">'+s.model+(isLow?'<span class="warn-badge">Low stock</span>':'')+'</div>'
+      +'<div class="si-sub">'+[s.bore?s.bore+'mm bore':'',s.stroke?s.stroke+'mm stroke':'',s.series].filter(Boolean).join(' · ')+'</div></div>'
+      +'<div class="sqty">'+s.qty+'</div>'
+      +'<button class="dbtn" data-id="'+s.id+'" data-model="'+s.model+'"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+  }).join('');
+  $('stockList').querySelectorAll('.dbtn').forEach(function(b){
+    b.addEventListener('click',function(){
+      pendingStockDelete=b.dataset.id;
+      $('deleteStockMsg').textContent='Remove '+b.dataset.model+' from stock?';
+      show('deleteStockModal');
+    });
+  });
+}
+
+$('deleteStockCancel').addEventListener('click',function(){hide('deleteStockModal');pendingStockDelete=null;});
+$('deleteStockConfirm').addEventListener('click',function(){if(pendingStockDelete&&db)db.collection('stock').doc(pendingStockDelete).delete();hide('deleteStockModal');pendingStockDelete=null;});
+$('deleteStockModal').addEventListener('click',function(e){if(e.target===$('deleteStockModal')){hide('deleteStockModal');pendingStockDelete=null;}});
+
+$('stockExpBtn').addEventListener('click',function(){
+  var wb=XLSX.utils.book_new();
+  var seen={};
+  var rows=(mappingRows||[]).map(function(row){
+    if(seen[row.key])return null; seen[row.key]=true;
+    var s=stock.filter(function(x){return x.model.toLowerCase()===row.key;})[0];
+    var qty=s?s.qty:0;
+    var mk=mapping[row.key]||{};
+    var minS=mk.minStock||0, maxS=mk.maxStock||0;
+    var toOrder=maxS>0&&qty<maxS?maxS-qty:'';
+    var status=minS>0&&qty<minS?'Low stock':'OK';
+    return[row.displayName,qty,minS||'',maxS||'',toOrder,status];
+  }).filter(Boolean);
+  stock.forEach(function(s){
+    var mk=s.model.toLowerCase();
+    if(!seen[mk]){
+      var minS=(mapping[mk]&&mapping[mk].minStock)||0, maxS=(mapping[mk]&&mapping[mk].maxStock)||0;
+      var toOrder=maxS>0&&s.qty<maxS?maxS-s.qty:'';
+      rows.push([s.model,s.qty,minS||'',maxS||'',toOrder,minS>0&&s.qty<minS?'Low stock':'OK']);
+    }
+  });
+  if(!rows.length){alert('No data to export.');return;}
+  var ws=XLSX.utils.aoa_to_sheet([['Model','Qty','Min Stock','Max Stock','To Order','Status']].concat(rows));
+  ws['!cols']=[{wch:25},{wch:6},{wch:10},{wch:10},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Stock');
+  XLSX.writeFile(wb,'festo-stock-'+new Date().toISOString().slice(0,10)+'.xlsx');
+});
+
+// ── Log tab ───────────────────────────────────────────────────────────────────
+function renderLog(){
+  if(!replacements.length){$('logArea').innerHTML='<div class="empty"><i class="ti ti-history" style="font-size:24px;display:block;margin-bottom:8px"></i>No replacements logged yet</div>';return;}
+  $('logArea').innerHTML='<div class="log-wrap"><table class="lt">'
+    +'<thead><tr><th>Date</th><th>Time</th><th>Model</th><th>Machine</th><th>Location</th><th>Qty</th><th></th></tr></thead>'
+    +'<tbody>'+replacements.map(function(r){
+      return '<tr><td>'+r.date+'</td><td>'+r.time+'</td>'
+        +'<td style="font-family:monospace;font-size:12px">'+r.model+'</td>'
+        +'<td>'+r.machine+'</td><td>'+(r.location||'—')+'</td><td>'+r.qty+'</td>'
+        +'<td><button class="dbtn log-del" data-id="'+r.id+'"><i class="ti ti-trash"></i></button></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  $('logArea').querySelectorAll('.log-del').forEach(function(b){
+    b.addEventListener('click',function(){pendingLogDelete=b.dataset.id;$('logPw').value='';show('deleteLogModal');setTimeout(function(){$('logPw').focus();},100);});
+  });
+}
+
+$('deleteLogCancel').addEventListener('click',function(){hide('deleteLogModal');pendingLogDelete=null;});
+$('deleteLogConfirm').addEventListener('click',function(){
+  if($('logPw').value!=='1921'){$('logPw').value='';$('logPw').placeholder='Incorrect — try again';return;}
+  if(pendingLogDelete&&db)db.collection('replacements').doc(pendingLogDelete).delete();
+  hide('deleteLogModal');pendingLogDelete=null;
+});
+$('logPw').addEventListener('keydown',function(e){if(e.key==='Enter')$('deleteLogConfirm').click();});
+$('deleteLogModal').addEventListener('click',function(e){if(e.target===$('deleteLogModal')){hide('deleteLogModal');pendingLogDelete=null;}});
+
+$('logExpBtn').addEventListener('click',function(){
+  if(!replacements.length){alert('No replacements to export.');return;}
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet([['Date','Time','Model','Machine No.','Location','Qty','Type']].concat(
+    replacements.map(function(r){return[r.date,r.time,r.model,r.machine,r.location||'',r.qty,r.type==='in'?'In':'Out'];})
+  ));
+  ws['!cols']=[{wch:12},{wch:8},{wch:22},{wch:14},{wch:22},{wch:6},{wch:6}];
+  XLSX.utils.book_append_sheet(wb,ws,'Replacements');
+  XLSX.writeFile(wb,'festo-log-'+new Date().toISOString().slice(0,10)+'.xlsx');
+});
+
+// ── Mapping tab ───────────────────────────────────────────────────────────────
+$('mappingFile').addEventListener('change',function(e){
+  var file=e.target.files[0]; if(!file) return;
+  file.arrayBuffer().then(function(ab){
+    var wb=XLSX.read(ab,{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var rows=XLSX.utils.sheet_to_json(ws,{header:1});
+    mapping={}; mappingRows=[]; $('mBody').innerHTML='';
+    var count=0;
+    rows.forEach(function(r,i){
+      if(i===0) return;
+      var model=String(r[0]||'').trim(), machine=String(r[1]||'').trim(), location=String(r[2]||'').trim();
+      var minStockRaw=String(r[3]||'').trim(), maxStockRaw=String(r[4]||'').trim();
+      var minStock=(minStockRaw===''||minStockRaw==='—')?0:parseInt(minStockRaw)||0;
+      var maxStock=(maxStockRaw===''||maxStockRaw==='—')?0:parseInt(maxStockRaw)||0;
+      if(model&&machine){
+        var mk=model.toLowerCase();
+        mappingRows.push({key:mk,displayName:model,machine:machine,location:location,minStock:minStock,maxStock:maxStock});
+        if(!mapping[mk]){mapping[mk]={displayName:model,machines:[],minStock:minStock,maxStock:maxStock};}
+        else{if(minStock>0&&mapping[mk].minStock===0)mapping[mk].minStock=minStock;if(maxStock>0&&mapping[mk].maxStock===0)mapping[mk].maxStock=maxStock;}
+        mapping[mk].machines.push({machine:machine,location:location});
+        count++;
+        var tr=document.createElement('tr');
+        tr.innerHTML='<td>'+model+'</td><td>'+machine+'</td><td>'+(location||'—')+'</td><td>'+(minStock||'—')+'</td><td>'+(maxStock||'—')+'</td>';
+        $('mBody').appendChild(tr);
+      }
+    });
+    $('mStat').textContent=count+' rows loaded — tap Save to sync';
+    $('mStat').className='fstat ok';
+    $('mPreview').style.display=count?'block':'none';
+    $('mSaveBtn').style.display='inline-block';
+  }).catch(function(){$('mStat').textContent='Error reading file';$('mStat').className='fstat';});
+});
+
+$('mSaveBtn').addEventListener('click',function(){
+  if(!db){alert('Connect Firebase in Settings first.');return;}
+  var rows=mappingRows.map(function(r){return{key:r.key,displayName:r.displayName,machine:r.machine,location:r.location,minStock:r.minStock||0,maxStock:r.maxStock||0};});
+  db.collection('config').doc('mapping').set({rows:JSON.stringify(rows)}).then(function(){
+    $('mStat').textContent=rows.length+' rows saved & synced';
+    $('mStat').className='fstat ok';
+    $('mSaveBtn').style.display='none';
+  }).catch(function(e){alert('Save failed: '+e.message);});
+});
+
+function renderMappingPreview(){
+  if($('mBody').children.length>0||!mappingRows.length) return;
+  mappingRows.forEach(function(row){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+row.displayName+'</td><td>'+row.machine+'</td><td>'+(row.location||'—')+'</td><td>'+(row.minStock||'—')+'</td><td>'+(row.maxStock||'—')+'</td>';
+    $('mBody').appendChild(tr);
+  });
+  $('mPreview').style.display='block';
+}
+
+$('dlTpl').addEventListener('click',function(){
+  var wb=XLSX.utils.book_new();
+  var ws=XLSX.utils.aoa_to_sheet([
+    ['Model','Machine No.','Location','Min Stock','Max Stock'],
+    ['DSBC-40-300-PPVA-N3','M-001','Line 1 / Press Area',2,5],
+    ['DSBC-40-300-PPVA-N3','M-007','Line 2 / Press Area','',''],
+    ['ADN-25-150-A-P-A','M-042','Line 3 / Bay 2',3,6],
+    ['DFM-20-20-P-A-GF','M-017','Assembly / Station 4',1,3],
+  ]);
+  ws['!cols']=[{wch:25},{wch:15},{wch:25},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb,ws,'Mapping');
+  XLSX.writeFile(wb,'cylinder-mapping-template.xlsx');
+});
+
+// ── Settings tab ──────────────────────────────────────────────────────────────
+function renderSettings(){
+  var k=localStorage.getItem('festo_api_key');
+  if(k){$('apiKey').value=k;$('apiSave').textContent='Saved ✓';$('apiSave').className='sbtn ok';}
+  var fc=localStorage.getItem('festo_fb_config');
+  if(fc){$('fbConfigInput').value=fc;}
+}
+
+$('apiSave').addEventListener('click',function(){
+  var k=$('apiKey').value.trim(); if(!k) return;
+  localStorage.setItem('festo_api_key',k);
+  $('apiSave').textContent='Saved ✓'; $('apiSave').className='sbtn ok';
+});
+
+$('fbSave').addEventListener('click',function(){
+  var raw=$('fbConfigInput').value.trim(); if(!raw){alert('Paste your Firebase config first.');return;}
+  var match=raw.match(/\{[\s\S]*\}/);
+  if(!match){alert('Could not find config object.');return;}
+  try{
+    var jsonStr=match[0].replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g,'$1"$2"$3');
+    var cfg=JSON.parse(jsonStr);
+    localStorage.setItem('festo_fb_config',JSON.stringify(cfg));
+    initFirebase(cfg);
+    $('fbSave').textContent='Connected ✓'; $('fbSave').className='sbtn ok';
+  }catch(e){alert('Could not parse config: '+e.message);}
+});
+
+function setFbStatus(state,msg){
+  var el=$('fbStatus');
+  if(state==='connected'){el.textContent='● Syncing';el.style.color='var(--green-tx)';}
+  else if(state==='connecting'){el.textContent='○ Connecting…';el.style.color='var(--amber-tx)';}
+  else{el.textContent='✕ '+(msg||'Not connected');el.style.color='var(--red-tx)';}
+}
+
+// ── Firebase ──────────────────────────────────────────────────────────────────
+function initFirebase(cfg){
+  try{
+    var app;
+    try{app=firebase.app();}catch(e){app=firebase.initializeApp(cfg);}
+    db=firebase.firestore();
+    setFbStatus('connected');
+    startListeners();
+  }catch(e){setFbStatus('error',e.message);}
+}
+
+function startListeners(){
+  db.collection('stock').onSnapshot(function(snap){
+    stock=[];
+    snap.forEach(function(d){stock.push(Object.assign({id:d.id},d.data()));});
+    renderStock();
+  });
+  db.collection('replacements').orderBy('ts','desc').onSnapshot(function(snap){
+    replacements=[];
+    snap.forEach(function(d){replacements.push(Object.assign({id:d.id},d.data()));});
+    renderLog();
+  });
+  db.collection('config').doc('mapping').onSnapshot(function(d){
+    if(!d.exists) return;
+    try{
+      var data=d.data();
+      var rows=data.rows?JSON.parse(data.rows):null;
+      if(!rows||!rows.length) return;
+      mapping={}; mappingRows=rows; $('mBody').innerHTML='';
+      rows.forEach(function(row){
+        if(!mapping[row.key]){mapping[row.key]={displayName:row.displayName||row.key,machines:[],minStock:row.minStock||0,maxStock:row.maxStock||0};}
+        else{if(row.minStock>0&&mapping[row.key].minStock===0)mapping[row.key].minStock=row.minStock;if(row.maxStock>0&&mapping[row.key].maxStock===0)mapping[row.key].maxStock=row.maxStock;}
+        mapping[row.key].machines.push({machine:row.machine,location:row.location});
+        var tr=document.createElement('tr');
+        tr.innerHTML='<td>'+row.displayName+'</td><td>'+row.machine+'</td><td>'+(row.location||'—')+'</td><td>'+(row.minStock||'—')+'</td><td>'+(row.maxStock||'—')+'</td>';
+        $('mBody').appendChild(tr);
+      });
+      $('mPreview').style.display='block';
+      $('mStat').textContent=rows.length+' mappings loaded';
+      $('mStat').className='fstat ok';
+    }catch(e){console.error('Mapping load error:',e);}
+  });
+}
+
+// ── Live QR scanner ──────────────────────────────────────────────────────────
+var qrStream=null, qrAnimFrame=null, qrCallback=null;
+
+function startQRScan(onResult){
+  qrCallback=onResult;
+  loadJsQR(function(){
+    if(!window.jsQR){alert('QR library failed to load.');return;}
+    navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+      qrStream=stream;
+      var video=$('qrVideo');
+      video.srcObject=stream;
+      video.play();
+      show('qrOverlay');
+      scanFrame();
+    }).catch(function(e){hide('qrOverlay');});
+  });
+}
+
+function scanFrame(){
+  var video=$('qrVideo');
+  var canvas=$('qrCanvas');
+  if(video.readyState===video.HAVE_ENOUGH_DATA){
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    var data=ctx.getImageData(0,0,canvas.width,canvas.height);
+    var result=jsQR(data.data,data.width,data.height,{inversionAttempts:'dontInvert'});
+    if(result){
+      stopQRScan();
+      if(qrCallback) qrCallback(result.data.trim().toUpperCase());
+      return;
+    }
+  }
+  qrAnimFrame=requestAnimationFrame(scanFrame);
+}
+
+function stopQRScan(){
+  if(qrAnimFrame) cancelAnimationFrame(qrAnimFrame);
+  if(qrStream) qrStream.getTracks().forEach(function(t){t.stop();});
+  qrStream=null; qrAnimFrame=null;
+  hide('qrOverlay');
+}
+
+$('qrClose').addEventListener('click',stopQRScan);
+
+$('qrScanOutBtn').addEventListener('click',function(){
+  startQRScan(function(code){
+    applyModel(code,true);
+  });
+});
+
+$('qrScanInBtn').addEventListener('click',function(){
+  startQRScan(function(code){
+    applyModel(code,false);
+  });
+});
+
+// ── Search ───────────────────────────────────────────────────────────────────
+function renderPartResults(query){
+  var el=$('searchPartResults');
+  if(!query){el.innerHTML='';return;}
+  var q=query.toLowerCase();
+  // Find matching models from mapping
+  var matches=[];
+  var seen={};
+  mappingRows.forEach(function(row){
+    if(seen[row.key]) return;
+    if(row.key.indexOf(q)!==-1||row.displayName.toLowerCase().indexOf(q)!==-1){
+      seen[row.key]=true;
+      var s=stock.filter(function(x){return x.model.toLowerCase()===row.key;})[0];
+      var qty=s?s.qty:0;
+      var mk=mapping[row.key]||{};
+      var minS=mk.minStock||0;
+      var isLow=minS>0&&qty<minS;
+      var machines=(mk.machines||[]).map(function(m){return m.machine+(m.location?' — '+m.location:'');}).join(', ');
+      matches.push({model:row.displayName,qty:qty,isLow:isLow,machines:machines,minS:minS});
+    }
+  });
+  if(!matches.length){el.innerHTML='<div class="sr-empty">No parts found matching "'+query+'"</div>';return;}
+  el.innerHTML=matches.map(function(m){
+    return '<div class="sr-item'+(m.isLow?' low':'')+'">'
+      +'<div style="flex:1;min-width:0"><div class="sr-model">'+m.model+(m.isLow?'<span class="warn-badge">Low</span>':'')+'</div>'
+      +'<div class="sr-detail">'+m.machines+'</div></div>'
+      +'<div class="sr-qty">'+m.qty+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderLocResults(query){
+  var el=$('searchLocResults');
+  if(!query){el.innerHTML='';return;}
+  var q=query.toLowerCase();
+  var matches=[];
+  var seen={};
+  mappingRows.forEach(function(row){
+    var machMatch=row.machine.toLowerCase().indexOf(q)!==-1;
+    var locMatch=row.location.toLowerCase().indexOf(q)!==-1;
+    if(machMatch||locMatch){
+      var uid=row.key+'|'+row.machine;
+      if(seen[uid]) return;
+      seen[uid]=true;
+      var s=stock.filter(function(x){return x.model.toLowerCase()===row.key;})[0];
+      var qty=s?s.qty:0;
+      var mk=mapping[row.key]||{};
+      var minS=mk.minStock||0;
+      var isLow=minS>0&&qty<minS;
+      matches.push({model:row.displayName,machine:row.machine,location:row.location,qty:qty,isLow:isLow});
+    }
+  });
+  if(!matches.length){el.innerHTML='<div class="sr-empty">No parts found at "'+query+'"</div>';return;}
+  el.innerHTML=matches.map(function(m){
+    return '<div class="sr-item'+(m.isLow?' low':'')+'">'
+      +'<div style="flex:1;min-width:0"><div class="sr-model">'+m.model+(m.isLow?'<span class="warn-badge">Low</span>':'')+'</div>'
+      +'<div class="sr-detail">'+m.machine+(m.location?' — '+m.location:'')+'</div></div>'
+      +'<div class="sr-qty">'+m.qty+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+$('searchPart').addEventListener('input',function(){renderPartResults(this.value.trim());});
+$('searchLoc').addEventListener('input',function(){renderLocResults(this.value.trim());});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(function boot(){
+  var fc=localStorage.getItem('festo_fb_config');
+  if(fc){try{setFbStatus('connecting');initFirebase(JSON.parse(fc));}catch(e){setFbStatus('error');}}
+  else{setFbStatus('none','Not connected — enter Firebase config in Settings');}
+  renderStock();
+  renderLog();
+})();
+
+})();
+</script>
+</body>
+</html>
