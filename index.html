@@ -375,7 +375,7 @@ table.lt{width:100%;border-collapse:collapse;font-size:13px}
   </div>
 </div>
 
-<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:2rem;padding-bottom:.5rem">v1.55 — 20 Jun 2026</div>
+<div style="text-align:center;font-size:11px;color:var(--text3);margin-top:2rem;padding-bottom:.5rem">v1.56 — 20 Jun 2026</div>
 </div>
 
 <script>
@@ -1016,13 +1016,16 @@ function renderPartResults(query){
 function renderLocResults(query){
   var el=$('searchLocResults');
   if(!query){el.innerHTML='';return;}
-  var q=query.toLowerCase();
+  // split into words - all words must match machine or location
+  var words=query.toLowerCase().split(/\s+/).filter(Boolean);
   var matches=[];
   var seen={};
   mappingRows.forEach(function(row){
-    var machMatch=row.machine.toLowerCase().indexOf(q)!==-1;
-    var locMatch=row.location.toLowerCase().indexOf(q)!==-1;
-    if(machMatch||locMatch){
+    var combined=(row.machine+' '+row.location).toLowerCase();
+    var allMatch=words.every(function(w){return combined.indexOf(w)!==-1;});
+    var machMatch=words.every(function(w){return row.machine.toLowerCase().indexOf(w)!==-1;});
+    var locMatch=words.every(function(w){return row.location.toLowerCase().indexOf(w)!==-1;});
+    if(allMatch||machMatch||locMatch){
       var uid=row.key+'|'+row.machine;
       if(seen[uid]) return;
       seen[uid]=true;
